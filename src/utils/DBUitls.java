@@ -1,10 +1,15 @@
 package utils;
 
 import com.mysql.cj.protocol.Resultset;
+import org.apache.commons.beanutils.BeanUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -110,5 +115,149 @@ public class DBUitls {
             close(conn,pstmt,null);
         }
         return -1;
+    }
+
+    protected <T> List<T> queryList_relect(Class<T> tClass,String sql,Object...params){
+        Connection conn = getConnection();
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        List<T> list = new ArrayList<>();
+        try {
+            pstmt = conn.prepareStatement(sql);
+            if (params != null){
+                for(int i = 0;i < params.length;i++){
+                    pstmt.setObject(i + 1,params[i]);
+                }
+            }
+
+            rs = pstmt.executeQuery();
+
+            while (rs.next()){
+                T t = tClass.newInstance();
+                //为对象t的属性赋值
+                ResultSetMetaData metaData = rs.getMetaData();
+                int columnCount = metaData.getColumnCount();//获取列的个数
+                for(int i = 0;i < columnCount;i++){
+                    String c_name = metaData.getColumnLabel(i + 1); //获取列名
+                    Field f = tClass.getDeclaredField(c_name);
+                    f.setAccessible(true); //设置私有的属性可见
+                    f.set(t,rs.getObject(c_name));
+                }
+
+                //将对象t插入到集合中
+                list.add(t);
+            }
+            return list;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        } finally {
+            close(conn,pstmt,rs);
+        }
+        return null;
+    }
+
+    /**
+     * 通用的查询，sql中查询的列必须和javaBean中的属性名一致
+     * @param tClass 查询的javaBean,必须有无参构造方法
+     * @param sql    查询的sql语句
+     * @param params sql语句的参数
+     * @param <T>   泛型
+     * @return  集合
+     */
+    protected <T> List<T> queryList(Class<T> tClass,String sql,Object...params){
+        Connection conn = getConnection();
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        List<T> list = new ArrayList<>();
+        try {
+            pstmt = conn.prepareStatement(sql);
+            if (params != null){
+                for(int i = 0;i < params.length;i++){
+                    pstmt.setObject(i + 1,params[i]);
+                }
+            }
+
+            rs = pstmt.executeQuery();
+
+            while (rs.next()){
+                T t = tClass.newInstance();
+                //为对象t的属性赋值
+                ResultSetMetaData metaData = rs.getMetaData();
+                int columnCount = metaData.getColumnCount();//获取列的个数
+                for(int i = 0;i < columnCount;i++){
+                    String c_name = metaData.getColumnLabel(i + 1); //获取列名
+                    BeanUtils.setProperty(t,c_name,rs.getObject(c_name));
+                }
+
+                //将对象t插入到集合中
+                list.add(t);
+            }
+            return list;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } finally {
+            close(conn,pstmt,rs);
+        }
+        return null;
+    }
+
+    /**
+     * 查询并返回一条数据
+     * @param tClass
+     * @param sql
+     * @param params
+     * @param <T>
+     * @return
+     */
+    protected <T> T queryOne(Class<T> tClass,String sql,Object...params){
+        Connection conn = getConnection();
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+        try {
+            T t = tClass.newInstance();
+
+            pstmt = conn.prepareStatement(sql);
+            if (params != null){
+                for (int i =0;i < params.length;i++){
+                    pstmt.setObject(i + 1,params[i]);
+                }
+            }
+
+            rs = pstmt.executeQuery();
+
+            if (rs.next()){
+                ResultSetMetaData metaData = rs.getMetaData();
+                for(int j = 0;j < metaData.getColumnCount();j++){
+                    String name = metaData.getColumnLabel(j + 1); //列名
+                    Object value = rs.getObject(name); //根据列名取值
+                    BeanUtils.setProperty(t,name,value);
+                }
+            }
+
+            return t;
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } finally {
+            close(conn,pstmt,rs);
+        }
+        return null;
     }
 }
